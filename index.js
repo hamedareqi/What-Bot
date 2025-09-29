@@ -1,115 +1,62 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode');
-const fetch = require('node-fetch');
-const axios = require('axios');
-const fs = require('fs');
-const FormData = require('form-data');
-require('dotenv').config();
+const { Client, LocalAuth } = require("whatsapp-web.js");
+const axios = require("axios");
+const qrcode = require("qrcode-terminal");
+require("dotenv").config();
 
-// ✅ التحقق من المتغيرات البيئية
-console.log("🚀 بدأ تشغيل البوت ... التحقق من المتغيرات البيئية");
-console.log("🔑 OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "موجود" : "❌ مفقود");
-console.log("🤖 TELEGRAM_BOT_TOKEN:", process.env.TELEGRAM_BOT_TOKEN ? "موجود" : "❌ مفقود");
-console.log("📨 TELEGRAM_CHAT_ID:", process.env.TELEGRAM_CHAT_ID ? "موجود" : "❌ مفقود");
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// 🔍 اختبار إرسال رسالة إلى تيليجرام
-(async () => {
-    try {
-        const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-        const chatId = process.env.TELEGRAM_CHAT_ID;
-
-        const response = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
-            method: 'POST',
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                chat_id: chatId,
-                text: "✅ اختبار: تم تشغيل البوت بنجاح وإرسال هذه الرسالة إلى تيليجرام"
-            })
-        });
-
-        const result = await response.json();
-        if (!result.ok) {
-            console.error("❌ فشل إرسال الرسالة التجريبية إلى تيليجرام:", result.description);
-        } else {
-            console.log("✅ تم إرسال الرسالة التجريبية إلى تيليجرام بنجاح.");
-        }
-    } catch (err) {
-        console.error("❌ خطأ في الاتصال بتيليجرام:", err.message);
-    }
-})();
-
-// 🟢 إعداد بوت واتساب
 const client = new Client({
-    authStrategy: new LocalAuth({ clientId: "whatsapp-bot" })
+  authStrategy: new LocalAuth(),
+  puppeteer: {
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  }
 });
 
-// 📤 إرسال رمز QR إلى تيليجرام كوثيقة
-client.on('qr', async qr => {
-    try {
-        const imagePath = './qr.png';
-        await qrcode.toFile(imagePath, qr);
+client.on("qr", async qr => {
+  console.log("🔑 رمز QR:\n", qr);
 
-        const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-        const chatId = process.env.TELEGRAM_CHAT_ID;
-
-        const formData = new FormData();
-        formData.append('chat_id', chatId);
-        formData.append('caption', '🔐 رمز QR لتسجيل الدخول إلى بوت واتساب');
-        formData.append('document', fs.createReadStream(imagePath));
-
-        const response = await fetch(`https://api.telegram.org/bot${telegramToken}/sendDocument`, {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await response.json();
-        if (!result.ok) {
-            console.error('❌ فشل إرسال QR كوثيقة إلى تيليجرام:', result.description);
-        } else {
-            console.log('✅ تم إرسال رمز QR إلى تيليجرام كوثيقة بنجاح.');
-        }
-
-        fs.unlinkSync(imagePath);
-
-    } catch (err) {
-        console.error('❌ خطأ في توليد أو إرسال QR:', err.message);
-    }
+  // إرسال QR إلى تيليجرام كبصمة نصية
+  try {
+    await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      chat_id: TELEGRAM_CHAT_ID,
+      text: `🔑 رمز QR لتسجيل الدخول إلى واتساب:\n\n${qr}`
+    });
+    console.log("📤 تم إرسال رمز QR إلى تيليجرام.");
+  } catch (err) {
+    console.error("❌ فشل إرسال رمز QR إلى تيليجرام:", err.message);
+  }
 });
 
-// ✅ جاهزية البوت
-client.on('ready', () => {
-    console.log('🤖 بوت واتساب جاهز للعمل!');
+client.on("ready", () => {
+  console.log("🤖 البوت جاهز ويعمل على حسابك مباشرة.");
 });
 
-// 💬 استقبال الرسائل والرد باستخدام OpenRouter
-client.on('message', async message => {
-    console.log('📩 رسالة واردة:', message.body);
+client.on("message", async msg => {
+  const incoming = msg.body;
+  console.log("📩 رسالة واردة:", incoming);
 
-    try {
-        const response = await axios.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            {
-                model: "mistral/mistral-7b-instruct",
-                messages: [
-                    { role: "system", content: "أنت مساعد ودود للرد على رسائل العملاء على واتساب." },
-                    { role: "user", content: message.body }
-                ]
-            },
-            {
-                headers: {
-                    "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
+  try {
+    const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
+      model: "openai/gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: "أنت مساعد ودود." },
+        { role: "user", content: incoming }
+      ]
+    }, {
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      }
+    });
 
-        const reply = response.data.choices[0].message.content;
-        await message.reply(reply);
-
-    } catch (error) {
-        console.error('❌ خطأ في الرد باستخدام OpenRouter:', error.message);
-        await message.reply("آسف، حدث خطأ ولم أستطع الرد الآن.");
-    }
+    const reply = response.data.choices[0].message.content;
+    console.log("✅ تم إرسال الرد:", reply);
+    msg.reply(reply);
+  } catch (error) {
+    console.error("❌ خطأ أثناء توليد الرد:", error.response?.data || error.message);
+    msg.reply("حدث خطأ ولم أستطع الرد الآن.");
+  }
 });
 
 client.initialize();
