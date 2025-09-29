@@ -2,6 +2,8 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const fetch = require('node-fetch');
 const axios = require('axios');
+const fs = require('fs');
+const FormData = require('form-data');
 require('dotenv').config();
 
 // ✅ التحقق من المتغيرات البيئية
@@ -41,31 +43,33 @@ const client = new Client({
     authStrategy: new LocalAuth({ clientId: "whatsapp-bot" })
 });
 
-// 📤 إرسال رمز QR إلى تيليجرام
+// 📤 إرسال رمز QR إلى تيليجرام كوثيقة
 client.on('qr', async qr => {
     try {
-        const imageDataUrl = await qrcode.toDataURL(qr);
-        const base64Data = imageDataUrl.replace(/^data:image\/png;base64,/, "");
+        const imagePath = './qr.png';
+        await qrcode.toFile(imagePath, qr);
 
         const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
         const chatId = process.env.TELEGRAM_CHAT_ID;
 
-        const response = await fetch(`https://api.telegram.org/bot${telegramToken}/sendPhoto`, {
+        const formData = new FormData();
+        formData.append('chat_id', chatId);
+        formData.append('caption', '🔐 رمز QR لتسجيل الدخول إلى بوت واتساب');
+        formData.append('document', fs.createReadStream(imagePath));
+
+        const response = await fetch(`https://api.telegram.org/bot${telegramToken}/sendDocument`, {
             method: 'POST',
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                chat_id: chatId,
-                photo: `data:image/png;base64,${base64Data}`,
-                caption: "🔐 رمز QR لتسجيل الدخول إلى بوت واتساب"
-            })
+            body: formData
         });
 
         const result = await response.json();
         if (!result.ok) {
-            console.error('❌ فشل إرسال QR إلى تيليجرام:', result.description);
+            console.error('❌ فشل إرسال QR كوثيقة إلى تيليجرام:', result.description);
         } else {
-            console.log('✅ تم إرسال رمز QR إلى تيليجرام بنجاح.');
+            console.log('✅ تم إرسال رمز QR إلى تيليجرام كوثيقة بنجاح.');
         }
+
+        fs.unlinkSync(imagePath);
 
     } catch (err) {
         console.error('❌ خطأ في توليد أو إرسال QR:', err.message);
@@ -85,7 +89,7 @@ client.on('message', async message => {
         const response = await axios.post(
             "https://openrouter.ai/api/v1/chat/completions",
             {
-                model: "mistral/mistral-7b-instruct", // يمكنك تغييره حسب المتاح
+                model: "mistral/mistral-7b-instruct",
                 messages: [
                     { role: "system", content: "أنت مساعد ودود للرد على رسائل العملاء على واتساب." },
                     { role: "user", content: message.body }
@@ -108,5 +112,4 @@ client.on('message', async message => {
     }
 });
 
-// 🚀 تشغيل البوت
 client.initialize();
