@@ -1,15 +1,16 @@
 {
   "name": "whatsapp-bot",
   "version": "1.0.0",
-  "description": "بوت واتساب متصل بـ OpenRouter API",
+  "description": "بوت واتساب متصل بـ OpenRouter ويرسل رمز QR إلى تيليجرام",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "whatsapp-web.js": "^1.19.0",
-    "qrcode-terminal": "^0.12.0",
+    "axios": "^1.6.0",
     "dotenv": "^16.0.0",
-    "axios": "^1.6.0"
+    "node-fetch": "^2.6.7",
+    "qrcode": "^1.5.1",
+    "whatsapp-web.js": "^1.19.0"
   }
 }
