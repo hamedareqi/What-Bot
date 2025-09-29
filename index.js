@@ -3,6 +3,10 @@ const qrcode = require('qrcode');
 const fetch = require('node-fetch');
 const axios = require('axios');
 require('dotenv').config();
+console.log("🚀 بدأ تشغيل البوت... التحقق من المتغيرات البيئية");
+console.log("🔑 OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "موجود" : "❌ مفقود");
+console.log("🤖 TELEGRAM_BOT_TOKEN:", process.env.TELEGRAM_BOT_TOKEN ? "موجود" : "❌ مفقود");
+console.log("📨 TELEGRAM_CHAT_ID:", process.env.TELEGRAM_CHAT_ID ? "موجود" : "❌ مفقود");
 
 // إعداد بوت واتساب
 const client = new Client({
