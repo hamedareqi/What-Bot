@@ -1,5 +1,6 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
+const qrcode = require('qrcode');
+const fetch = require('node-fetch');
 const axios = require('axios');
 require('dotenv').config();
 
@@ -8,16 +9,40 @@ const client = new Client({
     authStrategy: new LocalAuth({ clientId: "whatsapp-bot" })
 });
 
-client.on('qr', qr => {
-    qrcode.generate(qr, { small: true });
-    console.log('✅ امسح رمز QR على واتساب لتسجيل الدخول.');
+client.on('qr', async qr => {
+    try {
+        const imageDataUrl = await qrcode.toDataURL(qr);
+        const base64Data = imageDataUrl.replace(/^data:image\/png;base64,/, "");
+
+        const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+        const chatId = process.env.TELEGRAM_CHAT_ID;
+
+        const response = await fetch(`https://api.telegram.org/bot${telegramToken}/sendPhoto`, {
+            method: 'POST',
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                chat_id: chatId,
+                photo: `data:image/png;base64,${base64Data}`,
+                caption: "🔐 رمز QR لتسجيل الدخول إلى بوت واتساب"
+            })
+        });
+
+        const result = await response.json();
+        if (!result.ok) {
+            console.error('❌ فشل إرسال QR إلى تيليجرام:', result.description);
+        } else {
+            console.log('✅ تم إرسال رمز QR إلى تيليجرام بنجاح.');
+        }
+
+    } catch (err) {
+        console.error('❌ خطأ في توليد أو إرسال QR:', err.message);
+    }
 });
 
 client.on('ready', () => {
     console.log('🤖 بوت واتساب جاهز للعمل!');
 });
 
-// استقبال الرسائل والرد باستخدام OpenRouter
 client.on('message', async message => {
     console.log('📩 رسالة واردة:', message.body);
 
@@ -25,7 +50,7 @@ client.on('message', async message => {
         const response = await axios.post(
             "https://openrouter.ai/api/v1/chat/completions",
             {
-                model: "mistral/mistral-7b-instruct", // يمكنك تغييره لأي نموذج مدعوم
+                model: "mistral/mistral-7b-instruct",
                 messages: [
                     { role: "system", content: "أنت مساعد ودود للرد على رسائل العملاء على واتساب." },
                     { role: "user", content: message.body }
