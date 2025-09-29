@@ -3,16 +3,19 @@ const qrcode = require('qrcode');
 const fetch = require('node-fetch');
 const axios = require('axios');
 require('dotenv').config();
-console.log("🚀 بدأ تشغيل البوت... التحقق من المتغيرات البيئية");
+
+// ✅ التحقق من المتغيرات البيئية
+console.log("🚀 بدأ تشغيل البوت ... التحقق من المتغيرات البيئية");
 console.log("🔑 OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "موجود" : "❌ مفقود");
 console.log("🤖 TELEGRAM_BOT_TOKEN:", process.env.TELEGRAM_BOT_TOKEN ? "موجود" : "❌ مفقود");
 console.log("📨 TELEGRAM_CHAT_ID:", process.env.TELEGRAM_CHAT_ID ? "موجود" : "❌ مفقود");
 
-// إعداد بوت واتساب
+// 🟢 إعداد بوت واتساب
 const client = new Client({
     authStrategy: new LocalAuth({ clientId: "whatsapp-bot" })
 });
 
+// 📤 إرسال رمز QR إلى تيليجرام
 client.on('qr', async qr => {
     try {
         const imageDataUrl = await qrcode.toDataURL(qr);
@@ -43,10 +46,12 @@ client.on('qr', async qr => {
     }
 });
 
+// ✅ جاهزية البوت
 client.on('ready', () => {
     console.log('🤖 بوت واتساب جاهز للعمل!');
 });
 
+// 💬 استقبال الرسائل والرد باستخدام OpenRouter
 client.on('message', async message => {
     console.log('📩 رسالة واردة:', message.body);
 
@@ -54,7 +59,7 @@ client.on('message', async message => {
         const response = await axios.post(
             "https://openrouter.ai/api/v1/chat/completions",
             {
-                model: "mistral/mistral-7b-instruct",
+                model: "mistral/mistral-7b-instruct", // يمكنك تغييره حسب المتاح
                 messages: [
                     { role: "system", content: "أنت مساعد ودود للرد على رسائل العملاء على واتساب." },
                     { role: "user", content: message.body }
@@ -77,4 +82,5 @@ client.on('message', async message => {
     }
 });
 
+// 🚀 تشغيل البوت
 client.initialize();
