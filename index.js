@@ -1,6 +1,5 @@
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const axios = require("axios");
-const qrcode = require("qrcode-terminal");
 require("dotenv").config();
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -16,7 +15,6 @@ const client = new Client({
 client.on("qr", async qr => {
   console.log("🔑 رمز QR:\n", qr);
 
-  // إرسال QR إلى تيليجرام كبصمة نصية
   try {
     await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       chat_id: TELEGRAM_CHAT_ID,
@@ -55,7 +53,7 @@ client.on("message", async msg => {
     msg.reply(reply);
   } catch (error) {
     console.error("❌ خطأ أثناء توليد الرد:", error.response?.data || error.message);
-    msg.reply("حدث خطأ ولم أستطع الرد الآن.");
+    msg.reply("آسف، حدث خطأ ولم أستطع الرد الآن.");
   }
 });
 
