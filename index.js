@@ -10,6 +10,32 @@ console.log("🔑 OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "موجود" : 
 console.log("🤖 TELEGRAM_BOT_TOKEN:", process.env.TELEGRAM_BOT_TOKEN ? "موجود" : "❌ مفقود");
 console.log("📨 TELEGRAM_CHAT_ID:", process.env.TELEGRAM_CHAT_ID ? "موجود" : "❌ مفقود");
 
+// 🔍 اختبار إرسال رسالة إلى تيليجرام
+(async () => {
+    try {
+        const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+        const chatId = process.env.TELEGRAM_CHAT_ID;
+
+        const response = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+            method: 'POST',
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                chat_id: chatId,
+                text: "✅ اختبار: تم تشغيل البوت بنجاح وإرسال هذه الرسالة إلى تيليجرام"
+            })
+        });
+
+        const result = await response.json();
+        if (!result.ok) {
+            console.error("❌ فشل إرسال الرسالة التجريبية إلى تيليجرام:", result.description);
+        } else {
+            console.log("✅ تم إرسال الرسالة التجريبية إلى تيليجرام بنجاح.");
+        }
+    } catch (err) {
+        console.error("❌ خطأ في الاتصال بتيليجرام:", err.message);
+    }
+})();
+
 // 🟢 إعداد بوت واتساب
 const client = new Client({
     authStrategy: new LocalAuth({ clientId: "whatsapp-bot" })
