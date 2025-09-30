@@ -1,4 +1,3 @@
-
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const axios = require('axios');
@@ -20,7 +19,8 @@ const client = new Client({
       '--no-zygote',
       '--single-process',
       '--disable-gpu'
-    ],
+    ]
+    // لا نحدد executablePath لأن Replit لا يدعم تثبيت متصفح خارجي
   }
 });
 
@@ -33,10 +33,12 @@ const QR_SENT_FLAG = './qr_sent.flag'; // لضمان إرسال QR مرة واح
 // --- توليد QR وإرساله لتليجرام ---
 client.on('qr', async qr => {
   try {
-    if (fs.existsSync(QR_SENT_FLAG)) return; // تم الإرسال مسبقًا
+    if (fs.existsSync(QR_SENT_FLAG)) return;
 
     const qrImagePath = './qr.png';
     await qrcode.toFile(qrImagePath, qr);
+
+    if (!fs.existsSync(qrImagePath)) throw new Error('QR image not created');
 
     const formData = new FormData();
     formData.append('chat_id', TELEGRAM_CHAT_ID);
@@ -49,21 +51,21 @@ client.on('qr', async qr => {
     );
 
     fs.writeFileSync(QR_SENT_FLAG, 'sent');
-    console.log('QR code sent to Telegram successfully!');
+    console.log('✅ تم إرسال صورة QR إلى تيليجرام بنجاح');
   } catch (error) {
-    console.error('Error sending QR to Telegram:', error);
+    console.error('❌ خطأ أثناء إرسال QR إلى تيليجرام:', error.message);
   }
 });
 
 // --- حفظ الجلسة تلقائيًا ---
 client.on('ready', () => {
-  console.log('WhatsApp Bot is ready!');
+  console.log('🤖 البوت جاهز ويعمل على حسابك مباشرة.');
 });
 
 // --- استقبال الرسائل والرد عليها ---
 client.on('message', async msg => {
   try {
-    console.log(`Received message from ${msg.from}: ${msg.body}`);
+    console.log(`📩 رسالة واردة من ${msg.from}: ${msg.body}`);
 
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
@@ -80,12 +82,12 @@ client.on('message', async msg => {
       }
     );
 
-    const reply = response.data.choices[0].message.content;
+    const reply = response.data?.choices?.[0]?.message?.content || 'لم أتمكن من توليد رد.';
     await msg.reply(reply);
 
-    console.log(`Replied to ${msg.from}`);
+    console.log(`✅ تم الرد على ${msg.from}`);
   } catch (error) {
-    console.error('Error handling message:', error);
+    console.error('❌ خطأ أثناء معالجة الرسالة:', error.message);
     await msg.reply('حدث خطأ أثناء معالجة رسالتك.');
   }
 });
