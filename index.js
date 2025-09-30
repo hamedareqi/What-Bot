@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const wppconnect = require('wppconnect');
 const qrcode = require('qrcode');
 const axios = require('axios');
 const FormData = require('form-data');
@@ -10,24 +10,14 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const QR_SENT_FLAG = './qr_sent.flag';
 
-(async () => {
-  const { state, saveCreds } = await useMultiFileAuthState('auth');
-  const { version } = await fetchLatestBaileysVersion();
+wppconnect
+  .create({
+    session: 'bot-session',
+    catchQR: async (base64Qr) => {
+      if (fs.existsSync(QR_SENT_FLAG)) return;
 
-  const sock = makeWASocket({
-    version,
-    auth: state,
-    printQRInTerminal: false,
-    syncFullHistory: false
-  });
-
-  // توليد رمز QR وإرساله إلى تيليجرام مرة واحدة فقط
-  sock.ev.on('connection.update', async update => {
-    const { qr, connection } = update;
-
-    if (qr && !fs.existsSync(QR_SENT_FLAG)) {
       const qrImagePath = './qr.png';
-      await qrcode.toFile(qrImagePath, qr);
+      await qrcode.toFile(qrImagePath, base64Qr);
 
       const form = new FormData();
       form.append('chat_id', TELEGRAM_CHAT_ID);
@@ -42,52 +32,45 @@ const QR_SENT_FLAG = './qr_sent.flag';
 
       fs.writeFileSync(QR_SENT_FLAG, 'sent');
       console.log('✅ تم إرسال رمز QR إلى تيليجرام');
-    }
+    },
+    headless: true,
+    logQR: false,
+    autoClose: false,
+    popup: false
+  })
+  .then((client) => {
+    console.log('🤖 البوت جاهز ويعمل على حسابك مباشرة.');
 
-    if (connection === 'open') {
-      console.log('🤖 البوت جاهز ويعمل على حسابك مباشرة.');
-    }
-  });
+    client.onMessage(async (message) => {
+      if (!message.body || message.isGroupMsg) return;
 
-  // استقبال الرسائل والرد باستخدام OpenRouter
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
+      console.log(`📩 رسالة واردة من ${message.from}: ${message.body}`);
 
-    const msg = messages[0];
-    if (!msg.message || msg.key.fromMe) return;
-
-    const sender = msg.key.remoteJid;
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-
-    if (!text) return;
-
-    console.log(`📩 رسالة واردة من ${sender}: ${text}`);
-
-    try {
-      const response = await axios.post(
-        'https://openrouter.ai/api/v1/chat/completions',
-        {
-          model: 'mistral/mistral-7b-instruct',
-          messages: [{ role: 'user', content: text }],
-          max_tokens: 1000
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json'
+      try {
+        const response = await axios.post(
+          'https://openrouter.ai/api/v1/chat/completions',
+          {
+            model: 'mistral/mistral-7b-instruct',
+            messages: [{ role: 'user', content: message.body }],
+            max_tokens: 1000
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+              'Content-Type': 'application/json'
+            }
           }
-        }
-      );
+        );
 
-      const reply = response.data?.choices?.[0]?.message?.content || 'لم أتمكن من توليد رد.';
-      await sock.sendMessage(sender, { text: reply });
-      console.log(`✅ تم الرد على ${sender}`);
-    } catch (error) {
-      console.error('❌ خطأ أثناء معالجة الرسالة:', error.message);
-      await sock.sendMessage(sender, { text: 'حدث خطأ أثناء معالجة رسالتك.' });
-    }
+        const reply = response.data?.choices?.[0]?.message?.content || 'لم أتمكن من توليد رد.';
+        await client.sendText(message.from, reply);
+        console.log(`✅ تم الرد على ${message.from}`);
+      } catch (error) {
+        console.error('❌ خطأ أثناء معالجة الرسالة:', error.message);
+        await client.sendText(message.from, 'حدث خطأ أثناء معالجة رسالتك.');
+      }
+    });
+  })
+  .catch((error) => {
+    console.error('❌ خطأ أثناء تشغيل البوت:', error.message);
   });
-
-  // حفظ الجلسة تلقائيًا
-  sock.ev.on('creds.update', saveCreds);
-})();
