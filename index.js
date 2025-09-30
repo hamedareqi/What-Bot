@@ -5,87 +5,85 @@ require('dotenv').config();
 const GREEN_ID = process.env.GREEN_ID;
 const GREEN_TOKEN = process.env.GREEN_TOKEN;
 
-let delay = 60000;
+let delay = 60000; // يبدأ بـ 60 ثانية
 const minDelay = 5000;
 const maxDelay = 150000;
 const delayStep = 15000;
-const maxIdleCycles = 10;
 let idleCount = 0;
-let isPaused = false;
 
-const userMessages = {}; // { chatId: [msg1, msg2, ..., msg10] }
+const userMessages = {}; // حفظ آخر 10 رسائل لكل مستخدم
 
-function loadCommands() {
+function loadKnowledge() {
   try {
-    const raw = fs.readFileSync('./commands.json', 'utf-8');
+    const raw = fs.readFileSync('./knowledge.json', 'utf-8');
     return JSON.parse(raw);
   } catch (err) {
-    console.error('❌ فشل تحميل ملف الأوامر:', err.message);
+    console.error('❌ فشل تحميل ملف المعرفة:', err.message);
     return {};
   }
 }
 
-function resumePolling() {
-  if (!isPaused) return;
-  console.log('🔁 إعادة تشغيل الفحص بعد توقف مؤقت');
-  isPaused = false;
-  checkMessages();
+function matchMessage(message, knowledge) {
+  const normalized = message.trim().toLowerCase();
+  for (const key in knowledge) {
+    if (normalized.includes(key.toLowerCase())) {
+      return knowledge[key];
+    }
+  }
+  return null;
 }
 
 async function checkMessages() {
-  if (isPaused) return;
+  console.log(`⏳ انتظار ${delay / 1000} ثانية...`);
+  setTimeout(async () => {
+    console.log(`🔄 تحقق بعد الخمول (${delay / 1000} ثانية)`);
 
-  console.log(`🔄 فحص الرسائل... التأخير الحالي: ${delay / 1000} ثانية`);
+    try {
+      const response = await axios.get(`https://api.green-api.com/waInstance${GREEN_ID}/ReceiveNotification/${GREEN_TOKEN}`);
+      const data = response.data;
 
-  try {
-    const response = await axios.get(`https://api.green-api.com/waInstance${GREEN_ID}/ReceiveNotification/${GREEN_TOKEN}`);
-    const data = response.data;
+      if (data?.body?.typeWebhook === 'incomingMessageReceived') {
+        const message = data.body.messageData?.textMessageData?.textMessage;
+        const sender = data.body.senderData?.chatId;
 
-    if (data?.body?.typeWebhook === 'incomingMessageReceived') {
-      const message = data.body.messageData?.textMessageData?.textMessage;
-      const sender = data.body.senderData?.chatId;
+        if (message && sender) {
+          console.log(`📩 رسالة من ${sender}: ${message}`);
 
-      if (message && sender) {
-        console.log(`📩 رسالة من ${sender}: ${message}`);
+          // حفظ الرسالة في سجل المستخدم
+          if (!userMessages[sender]) userMessages[sender] = [];
+          userMessages[sender].push(message);
+          if (userMessages[sender].length > 10) userMessages[sender].shift();
 
-        // حفظ آخر 10 رسائل
-        if (!userMessages[sender]) userMessages[sender] = [];
-        userMessages[sender].push(message);
-        if (userMessages[sender].length > 10) userMessages[sender].shift();
+          const knowledge = loadKnowledge();
+          const reply = matchMessage(message, knowledge) || '❌ عذرًا، لا يمكنني الرد على هذا السؤال لأنه خارج نطاق المعرفة المحددة.';
 
-        const commands = loadCommands();
-        let reply = commands[message] || '❌ هذا السؤال غير مدعوم حاليًا. يرجى اختيار سؤال من القائمة المسموحة.';
+          await axios.post(`https://api.green-api.com/waInstance${GREEN_ID}/SendMessage/${GREEN_TOKEN}`, {
+            chatId: sender,
+            message: reply
+          });
 
-        await axios.post(`https://api.green-api.com/waInstance${GREEN_ID}/SendMessage/${GREEN_TOKEN}`, {
-          chatId: sender,
-          message: reply
-        });
+          await axios.delete(`https://api.green-api.com/waInstance${GREEN_ID}/DeleteNotification/${GREEN_TOKEN}/${data.receiptId}`);
 
-        await axios.delete(`https://api.green-api.com/waInstance${GREEN_ID}/DeleteNotification/${GREEN_TOKEN}/${data.receiptId}`);
-
-        delay = minDelay;
-        idleCount = 0;
-        console.log(`✅ تم الرد على ${sender}، إعادة الفحص بعد ${delay / 1000} ثانية`);
+          // عند وجود رسالة، نعود إلى الفحص السريع
+          delay = minDelay;
+          idleCount = 0;
+        }
+      } else {
+        // لا توجد رسالة، نزيد التأخير تدريجيًا
+        delay = Math.min(maxDelay, delay + delayStep);
+        idleCount++;
+        console.log(`😴 لا توجد رسائل، عداد الخمول: ${idleCount}`);
       }
-    } else {
+    } catch (error) {
+      console.error('❌ خطأ أثناء الفحص:', error.message);
       delay = Math.min(maxDelay, delay + delayStep);
       idleCount++;
-      console.log(`😴 لا توجد رسائل، عداد الخمول: ${idleCount}/${maxIdleCycles}`);
-
-      if (idleCount >= maxIdleCycles) {
-        console.log('🛑 تم الوصول إلى حد الخمول، سيتم إيقاف الفحص مؤقتًا لتوفير الوقت');
-        isPaused = true;
-        setTimeout(resumePolling, 10 * 60 * 1000);
-        return;
-      }
     }
-  } catch (error) {
-    console.error('❌ خطأ أثناء الفحص:', error.message);
-    delay = Math.min(maxDelay, delay + delayStep);
-    idleCount++;
-  }
 
-  setTimeout(checkMessages, delay);
+    // إعادة الفحص بعد التأخير الجديد
+    checkMessages();
+  }, delay);
 }
 
+// بدء الفحص
 checkMessages();
