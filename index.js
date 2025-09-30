@@ -1,12 +1,9 @@
-
-import { Client, LocalAuth } from 'whatsapp-web.js';
-import qrcode from 'qrcode';
-import axios from 'axios';
-import FormData from 'form-data';
-import fs from 'fs';
-import dotenv from 'dotenv';
-
-dotenv.config();
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode');
+const axios = require('axios');
+const FormData = require('form-data');
+const fs = require('fs');
+require('dotenv').config();
 
 // --- إعداد البوت ---
 const client = new Client({
