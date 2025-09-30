@@ -6,7 +6,7 @@ require('dotenv').config();
 const GREEN_ID = process.env.GREEN_ID;
 const GREEN_TOKEN = process.env.GREEN_TOKEN;
 
-// استخدم رابط الإنستانس المخصص حسب الصورة الأخيرة
+// استخدم الرابط المخصص لإنستانسك الجديد
 const BASE_URL = `https://7105.api.greenapi.com/waInstance${GREEN_ID}`;
 
 // حفظ آخر 10 رسائل لكل مستخدم
@@ -66,7 +66,9 @@ async function checkMessages() {
       }
     }
   } catch (error) {
-    console.error('❌ خطأ أثناء الفحص:', error.response?.status || error.message);
+    const status = error.response?.status || 'غير معروف';
+    const message = error.response?.data || error.message;
+    console.error(`❌ خطأ أثناء الفحص: ${status} - ${JSON.stringify(message)}`);
   }
 }
 
