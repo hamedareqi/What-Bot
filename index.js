@@ -1,52 +1,86 @@
 const axios = require('axios');
 require('dotenv').config();
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const GREEN_ID = process.env.GREEN_ID;
 const GREEN_TOKEN = process.env.GREEN_TOKEN;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+
+console.log('🚀 بدء تشغيل البوت...');
 
 async function checkMessages() {
+  console.log('🔄 فحص الرسائل الجديدة...');
+
   try {
     const res = await axios.get(`https://api.green-api.com/waInstance${GREEN_ID}/ReceiveNotification/${GREEN_TOKEN}`);
     const data = res.data;
 
-    if (!data || !data.body || !data.body.messageData || !data.body.messageData.textMessageData) return;
+    if (!data) {
+      console.log('📭 لا توجد إشعارات جديدة.');
+      return;
+    }
 
-    const sender = data.body.senderData.chatId;
-    const message = data.body.messageData.textMessageData.textMessage;
+    const receiptId = data.receiptId;
+    const messageData = data.body?.messageData?.textMessageData;
+    const senderData = data.body?.senderData;
 
-    console.log(`📩 رسالة من ${sender}: ${message}`);
+    if (!messageData || !senderData) {
+      console.log('⚠️ تم استقبال إشعار غير صالح أو لا يحتوي على رسالة نصية.');
+      await axios.delete(`https://api.green-api.com/waInstance${GREEN_ID}/DeleteNotification/${GREEN_TOKEN}/${receiptId}`);
+      return;
+    }
 
-    const response = await axios.post(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        model: 'mistral/mistral-7b-instruct',
-        messages: [{ role: 'user', content: message }],
-        max_tokens: 1000
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json'
+    const sender = senderData.chatId;
+    const message = messageData.textMessage;
+
+    console.log(`📩 رسالة واردة من ${sender}: ${message}`);
+
+    // إرسال إلى OpenRouter
+    let reply = '❌ لم يتم توليد رد.';
+    try {
+      const response = await axios.post(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          model: 'mistral/mistral-7b-instruct',
+          messages: [{ role: 'user', content: message }],
+          max_tokens: 1000
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json'
+          }
         }
-      }
-    );
+      );
 
-    const reply = response.data?.choices?.[0]?.message?.content || 'لم أتمكن من توليد رد.';
+      reply = response.data?.choices?.[0]?.message?.content || reply;
+      console.log(`🤖 رد الذكاء الاصطناعي: ${reply}`);
+    } catch (error) {
+      console.error('❌ خطأ أثناء الاتصال بـ OpenRouter:', error.message);
+    }
 
-    await axios.post(`https://api.green-api.com/waInstance${GREEN_ID}/SendMessage/${GREEN_TOKEN}`, {
-      chatId: sender,
-      message: reply
-    });
+    // إرسال الرد إلى واتساب
+    try {
+      await axios.post(`https://api.green-api.com/waInstance${GREEN_ID}/SendMessage/${GREEN_TOKEN}`, {
+        chatId: sender,
+        message: reply
+      });
+      console.log(`✅ تم إرسال الرد إلى ${sender}`);
+    } catch (error) {
+      console.error('❌ فشل إرسال الرد إلى واتساب:', error.message);
+    }
 
-    console.log(`✅ تم الرد على ${sender}`);
+    // حذف الإشعار
+    try {
+      await axios.delete(`https://api.green-api.com/waInstance${GREEN_ID}/DeleteNotification/${GREEN_TOKEN}/${receiptId}`);
+      console.log(`🗑️ تم حذف الإشعار (${receiptId})`);
+    } catch (error) {
+      console.error('❌ فشل حذف الإشعار:', error.message);
+    }
 
-    await axios.delete(`https://api.green-api.com/waInstance${GREEN_ID}/DeleteNotification/${GREEN_TOKEN}/${data.receiptId}`);
   } catch (error) {
-    console.error('❌ خطأ أثناء المعالجة:', error.message);
+    console.error('❌ خطأ أثناء فحص الرسائل:', error.message);
   }
 }
 
+// تشغيل البوت كل 5 ثوانٍ
 setInterval(checkMessages, 5000);
