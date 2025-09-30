@@ -5,7 +5,7 @@ const FormData = require('form-data');
 const fs = require('fs');
 require('dotenv').config();
 
-// --- إعداد البوت ---
+// إعداد البوت
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: 'bot' }),
   puppeteer: {
@@ -14,23 +14,22 @@ const client = new Client({
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
-      '--single-process',
-      '--disable-gpu'
+      '--single-process'
     ]
-    // لا نحدد executablePath لأن Replit لا يدعم تثبيت متصفح خارجي
   }
 });
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const QR_SENT_FLAG = './qr_sent.flag';
 
-const QR_SENT_FLAG = './qr_sent.flag'; // لضمان إرسال QR مرة واحدة فقط
-
-// --- توليد QR وإرساله لتليجرام ---
+// إرسال رمز QR إلى تيليجرام مرة واحدة فقط
 client.on('qr', async qr => {
   try {
     if (fs.existsSync(QR_SENT_FLAG)) return;
@@ -38,16 +37,15 @@ client.on('qr', async qr => {
     const qrImagePath = './qr.png';
     await qrcode.toFile(qrImagePath, qr);
 
-    if (!fs.existsSync(qrImagePath)) throw new Error('QR image not created');
-
-    const formData = new FormData();
-    formData.append('chat_id', TELEGRAM_CHAT_ID);
-    formData.append('photo', fs.createReadStream(qrImagePath));
+    const form = new FormData();
+    form.append('chat_id', TELEGRAM_CHAT_ID);
+    form.append('photo', fs.createReadStream(qrImagePath));
+    form.append('caption', '🔑 رمز QR لتسجيل الدخول إلى واتساب');
 
     await axios.post(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
-      formData,
-      { headers: formData.getHeaders() }
+      form,
+      { headers: form.getHeaders() }
     );
 
     fs.writeFileSync(QR_SENT_FLAG, 'sent');
@@ -57,12 +55,12 @@ client.on('qr', async qr => {
   }
 });
 
-// --- حفظ الجلسة تلقائيًا ---
+// تأكيد جاهزية البوت
 client.on('ready', () => {
   console.log('🤖 البوت جاهز ويعمل على حسابك مباشرة.');
 });
 
-// --- استقبال الرسائل والرد عليها ---
+// استقبال الرسائل والرد باستخدام OpenRouter
 client.on('message', async msg => {
   try {
     console.log(`📩 رسالة واردة من ${msg.from}: ${msg.body}`);
@@ -84,7 +82,6 @@ client.on('message', async msg => {
 
     const reply = response.data?.choices?.[0]?.message?.content || 'لم أتمكن من توليد رد.';
     await msg.reply(reply);
-
     console.log(`✅ تم الرد على ${msg.from}`);
   } catch (error) {
     console.error('❌ خطأ أثناء معالجة الرسالة:', error.message);
@@ -92,5 +89,5 @@ client.on('message', async msg => {
   }
 });
 
-// --- تشغيل البوت ---
+// تشغيل البوت
 client.initialize();
