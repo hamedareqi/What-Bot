@@ -2,11 +2,17 @@ const axios = require('axios');
 const fs = require('fs');
 require('dotenv').config();
 
+// بيانات الاتصال بـ Green-API
 const GREEN_ID = process.env.GREEN_ID;
 const GREEN_TOKEN = process.env.GREEN_TOKEN;
 
-const userMessages = {}; // حفظ آخر 10 رسائل لكل مستخدم
+// استخدم رابط الإنستانس المخصص حسب الصورة الأخيرة
+const BASE_URL = `https://7105.api.greenapi.com/waInstance${GREEN_ID}`;
 
+// حفظ آخر 10 رسائل لكل مستخدم
+const userMessages = {};
+
+// تحميل قاعدة المعرفة من ملف خارجي
 function loadKnowledge() {
   try {
     const raw = fs.readFileSync('./knowledge.json', 'utf-8');
@@ -17,6 +23,7 @@ function loadKnowledge() {
   }
 }
 
+// مطابقة الرسالة مع قاعدة المعرفة
 function matchMessage(message, knowledge) {
   const normalized = message.trim().toLowerCase();
   for (const key in knowledge) {
@@ -27,9 +34,10 @@ function matchMessage(message, knowledge) {
   return null;
 }
 
+// الفحص الدوري للرسائل
 async function checkMessages() {
   try {
-    const response = await axios.get(`https://api.green-api.com/waInstance${GREEN_ID}/ReceiveNotification/${GREEN_TOKEN}`);
+    const response = await axios.get(`${BASE_URL}/ReceiveNotification/${GREEN_TOKEN}`);
     const data = response.data;
 
     if (data?.body?.typeWebhook === 'incomingMessageReceived') {
@@ -44,21 +52,23 @@ async function checkMessages() {
         userMessages[sender].push(message);
         if (userMessages[sender].length > 10) userMessages[sender].shift();
 
+        // تحميل المعرفة والرد
         const knowledge = loadKnowledge();
         const reply = matchMessage(message, knowledge) || '❌ عذرًا، لا يمكنني الرد على هذا السؤال لأنه خارج نطاق المعرفة المحددة.';
 
-        await axios.post(`https://api.green-api.com/waInstance${GREEN_ID}/SendMessage/${GREEN_TOKEN}`, {
+        await axios.post(`${BASE_URL}/SendMessage/${GREEN_TOKEN}`, {
           chatId: sender,
           message: reply
         });
 
-        await axios.delete(`https://api.green-api.com/waInstance${GREEN_ID}/DeleteNotification/${GREEN_TOKEN}/${data.receiptId}`);
+        // حذف الإشعار بعد الرد
+        await axios.delete(`${BASE_URL}/DeleteNotification/${GREEN_TOKEN}/${data.receiptId}`);
       }
     }
   } catch (error) {
-    console.error('❌ خطأ أثناء الفحص:', error.message);
+    console.error('❌ خطأ أثناء الفحص:', error.response?.status || error.message);
   }
 }
 
-// فحص دوري كل 2 ثانية
+// تشغيل الفحص كل 2 ثانية
 setInterval(checkMessages, 2000);
