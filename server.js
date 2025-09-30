@@ -5,16 +5,18 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
+// إعداد المتغيرات من البيئة
 const GREEN_ID = process.env.GREEN_ID;
 const GREEN_TOKEN = process.env.GREEN_TOKEN;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
+// استقبال الرسائل من Green-API
 app.post('/webhook', async (req, res) => {
   console.log('📥 تم استقبال طلب Webhook من Green-API');
 
   const body = req.body;
 
-  // تحقق من نوع الإشعار
+  // تجاهل أي إشعار غير متعلق برسالة واردة
   if (body.typeWebhook !== 'incomingMessageReceived') {
     console.log(`⚠️ تم تجاهل إشعار من نوع: ${body.typeWebhook}`);
     return res.sendStatus(200);
@@ -23,7 +25,6 @@ app.post('/webhook', async (req, res) => {
   const messageData = body.messageData?.textMessageData;
   const senderData = body.senderData;
 
-  // تحقق من وجود رسالة نصية
   if (!messageData || !senderData || !senderData.chatId) {
     console.log('⚠️ لا توجد رسالة نصية صالحة أو بيانات مرسل.');
     return res.sendStatus(200);
@@ -51,17 +52,12 @@ app.post('/webhook', async (req, res) => {
       }
     );
 
-    if (response.data?.choices?.[0]?.message?.content) {
-      reply = response.data.choices[0].message.content;
-      console.log(`🤖 رد الذكاء الاصطناعي: ${reply}`);
-    } else {
-      console.log('⚠️ لم يتم العثور على رد داخل choices.');
-    }
+    reply = response.data?.choices?.[0]?.message?.content || reply;
+    console.log(`🤖 رد الذكاء الاصطناعي: ${reply}`);
   } catch (error) {
     console.error('❌ خطأ في الاتصال بـ OpenRouter:', error.message);
   }
 
-  // إرسال الرد إلى واتساب
   try {
     await axios.post(`https://api.green-api.com/waInstance${GREEN_ID}/SendMessage/${GREEN_TOKEN}`, {
       chatId: sender,
@@ -75,7 +71,12 @@ app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
 });
 
-// تشغيل السيرفر
+// تشغيل السيرفر وطباعة رابط Webhook تلقائيًا
 app.listen(3000, () => {
+  const username = 'hamedareqi';       // اسم المستخدم في Replit
+  const project = 'what-bot';          // اسم المشروع في Replit
+  const webhookUrl = `https://${project}-${username}.replit.app/webhook`;
+
   console.log('🚀 Webhook server يعمل على المنفذ 3000');
+  console.log(`🌐 رابط Webhook الكامل: ${webhookUrl}`);
 });
