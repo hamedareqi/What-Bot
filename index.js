@@ -1,6 +1,8 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const axios = require('axios');
 const QRCode = require('qrcode');
+const FormData = require('form-data');
+const { Buffer } = require('buffer');
 require('dotenv').config();
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -23,11 +25,18 @@ client.on('qr', async qr => {
     try {
         const qrImageDataUrl = await QRCode.toDataURL(qr);
         const base64Data = qrImageDataUrl.replace(/^data:image\/png;base64,/, "");
+        const imageBuffer = Buffer.from(base64Data, 'base64');
 
-        await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-            chat_id: TELEGRAM_CHAT_ID,
-            photo: `data:image/png;base64,${base64Data}`,
-            caption: "🔑 رمز QR لتسجيل الدخول إلى واتساب"
+        const form = new FormData();
+        form.append("chat_id", TELEGRAM_CHAT_ID);
+        form.append("caption", "🔑 رمز QR لتسجيل الدخول إلى واتساب");
+        form.append("photo", imageBuffer, {
+            filename: "qr.png",
+            contentType: "image/png"
+        });
+
+        await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, form, {
+            headers: form.getHeaders()
         });
 
         console.log("📤 تم إرسال صورة QR إلى تيليجرام.");
