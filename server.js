@@ -10,14 +10,24 @@ const GREEN_TOKEN = process.env.GREEN_TOKEN;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 app.post('/webhook', async (req, res) => {
+  console.log('📥 تم استقبال طلب Webhook من Green-API');
+
   const body = req.body;
 
-  if (body.typeWebhook !== 'incomingMessageReceived') return res.sendStatus(200);
+  // تحقق من نوع الإشعار
+  if (body.typeWebhook !== 'incomingMessageReceived') {
+    console.log(`⚠️ تم تجاهل إشعار من نوع: ${body.typeWebhook}`);
+    return res.sendStatus(200);
+  }
 
   const messageData = body.messageData?.textMessageData;
   const senderData = body.senderData;
 
-  if (!messageData || !senderData) return res.sendStatus(200);
+  // تحقق من وجود رسالة نصية
+  if (!messageData || !senderData || !senderData.chatId) {
+    console.log('⚠️ لا توجد رسالة نصية صالحة أو بيانات مرسل.');
+    return res.sendStatus(200);
+  }
 
   const sender = senderData.chatId;
   const message = messageData.textMessage;
@@ -41,12 +51,17 @@ app.post('/webhook', async (req, res) => {
       }
     );
 
-    reply = response.data?.choices?.[0]?.message?.content || reply;
-    console.log(`🤖 رد الذكاء الاصطناعي: ${reply}`);
+    if (response.data?.choices?.[0]?.message?.content) {
+      reply = response.data.choices[0].message.content;
+      console.log(`🤖 رد الذكاء الاصطناعي: ${reply}`);
+    } else {
+      console.log('⚠️ لم يتم العثور على رد داخل choices.');
+    }
   } catch (error) {
-    console.error('❌ خطأ في OpenRouter:', error.message);
+    console.error('❌ خطأ في الاتصال بـ OpenRouter:', error.message);
   }
 
+  // إرسال الرد إلى واتساب
   try {
     await axios.post(`https://api.green-api.com/waInstance${GREEN_ID}/SendMessage/${GREEN_TOKEN}`, {
       chatId: sender,
@@ -54,12 +69,13 @@ app.post('/webhook', async (req, res) => {
     });
     console.log(`✅ تم إرسال الرد إلى ${sender}`);
   } catch (error) {
-    console.error('❌ فشل إرسال الرد:', error.message);
+    console.error('❌ فشل إرسال الرد إلى واتساب:', error.message);
   }
 
   res.sendStatus(200);
 });
 
+// تشغيل السيرفر
 app.listen(3000, () => {
   console.log('🚀 Webhook server يعمل على المنفذ 3000');
 });
