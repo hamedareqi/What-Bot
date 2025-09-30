@@ -21,7 +21,7 @@ const QR_SENT_FLAG = './qr_sent.flag';
     syncFullHistory: false
   });
 
-  // توليد رمز QR وإرساله إلى تيليجرام
+  // توليد رمز QR وإرساله إلى تيليجرام مرة واحدة فقط
   sock.ev.on('connection.update', async update => {
     const { qr, connection } = update;
 
