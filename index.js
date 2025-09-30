@@ -3,21 +3,22 @@ const axios = require("axios");
 const QRCode = require("qrcode");
 require("dotenv").config();
 
-// قراءة المفاتيح من البيئة
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const client = new Client({
-  authStrategy: new LocalAuth(),
+  authStrategy: new LocalAuth({ clientId: "whatsapp-session" }),
   puppeteer: {
     args: ["--no-sandbox", "--disable-setuid-sandbox"]
   }
 });
 
-// إرسال رمز QR إلى تيليجرام كصورة
+let qrSent = false;
+
 client.on("qr", async qr => {
-  console.log("🔑 رمز QR:\n", qr);
+  if (qrSent) return; // لا ترسل الرمز أكثر من مرة
+  qrSent = true;
 
   try {
     const qrImageDataUrl = await QRCode.toDataURL(qr);
@@ -35,12 +36,10 @@ client.on("qr", async qr => {
   }
 });
 
-// تأكيد جاهزية البوت
 client.on("ready", () => {
   console.log("🤖 البوت جاهز ويعمل على حسابك مباشرة.");
 });
 
-// استقبال الرسائل والرد باستخدام OpenRouter
 client.on("message", async msg => {
   const incoming = msg.body;
   console.log("📩 رسالة واردة:", incoming);
