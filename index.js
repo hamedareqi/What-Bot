@@ -1,82 +1,83 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const axios = require('axios');
-const QRCode = require('qrcode');
-const FormData = require('form-data');
-const { Buffer } = require('buffer');
-require('dotenv').config();
+
+import { Client, LocalAuth } from 'whatsapp-web.js';
+import qrcode from 'qrcode';
+import axios from 'axios';
+import FormData from 'form-data';
+import fs from 'fs';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+// --- إعداد البوت ---
+const client = new Client({
+  authStrategy: new LocalAuth({ clientId: 'bot' }),
+});
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-const client = new Client({
-    authStrategy: new LocalAuth({ clientId: "whatsapp-bot" }),
-    puppeteer: {
-        args: ["--no-sandbox", "--disable-setuid-sandbox"]
-    }
-});
+const QR_SENT_FLAG = './qr_sent.flag'; // لضمان إرسال QR مرة واحدة فقط
 
-let qrSent = false;
-
+// --- توليد QR وإرساله لتليجرام ---
 client.on('qr', async qr => {
-    if (qrSent) return;
-    qrSent = true;
+  try {
+    if (fs.existsSync(QR_SENT_FLAG)) return; // تم الإرسال مسبقًا
 
-    try {
-        const qrImageDataUrl = await QRCode.toDataURL(qr);
-        const base64Data = qrImageDataUrl.replace(/^data:image\/png;base64,/, "");
-        const imageBuffer = Buffer.from(base64Data, 'base64');
+    const qrImagePath = './qr.png';
+    await qrcode.toFile(qrImagePath, qr);
 
-        const form = new FormData();
-        form.append("chat_id", TELEGRAM_CHAT_ID);
-        form.append("caption", "🔑 رمز QR لتسجيل الدخول إلى واتساب");
-        form.append("photo", imageBuffer, {
-            filename: "qr.png",
-            contentType: "image/png"
-        });
+    const formData = new FormData();
+    formData.append('chat_id', TELEGRAM_CHAT_ID);
+    formData.append('photo', fs.createReadStream(qrImagePath));
 
-        await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, form, {
-            headers: form.getHeaders()
-        });
+    await axios.post(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+      formData,
+      { headers: formData.getHeaders() }
+    );
 
-        console.log("📤 تم إرسال صورة QR إلى تيليجرام.");
-    } catch (err) {
-        console.error("❌ فشل إرسال صورة QR إلى تيليجرام:", err.message);
-    }
+    fs.writeFileSync(QR_SENT_FLAG, 'sent');
+    console.log('QR code sent to Telegram successfully!');
+  } catch (error) {
+    console.error('Error sending QR to Telegram:', error);
+  }
 });
 
+// --- حفظ الجلسة تلقائيًا ---
 client.on('ready', () => {
-    console.log('🤖 البوت جاهز ويعمل على حسابك مباشرة.');
+  console.log('WhatsApp Bot is ready!');
 });
 
-client.on('message', async message => {
-    console.log('📩 رسالة واردة:', message.body);
+// --- استقبال الرسائل والرد عليها ---
+client.on('message', async msg => {
+  try {
+    console.log(`Received message from ${msg.from}: ${msg.body}`);
 
-    try {
-        const response = await axios.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            {
-                model: "mistral/mistral-7b-instruct",
-                messages: [
-                    { role: "system", content: "أنت مساعد ودود للرد على رسائل العملاء على واتساب." },
-                    { role: "user", content: message.body }
-                ]
-            },
-            {
-                headers: {
-                    "Authorization": `Bearer ${OPENAI_API_KEY}`,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: 'mistral/mistral-7b-instruct',
+        messages: [{ role: 'user', content: msg.body }],
+        max_tokens: 1000
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
 
-        const reply = response.data.choices[0].message.content;
-        await message.reply(reply);
+    const reply = response.data.choices[0].message.content;
+    await msg.reply(reply);
 
-    } catch (error) {
-        console.error('❌ خطأ في الرد:', error.message);
-        await message.reply("آسف، حدث خطأ ولم أستطع الرد الآن.");
-    }
+    console.log(`Replied to ${msg.from}`);
+  } catch (error) {
+    console.error('Error handling message:', error);
+    await msg.reply('حدث خطأ أثناء معالجة رسالتك.');
+  }
 });
 
+// --- تشغيل البوت ---
 client.initialize();
