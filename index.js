@@ -43,12 +43,10 @@ async function checkMessages() {
 
     console.log(`✅ تم الرد على ${sender}`);
 
-    // حذف الإشعار بعد المعالجة
     await axios.delete(`https://api.green-api.com/waInstance${GREEN_ID}/DeleteNotification/${GREEN_TOKEN}/${data.receiptId}`);
   } catch (error) {
     console.error('❌ خطأ أثناء المعالجة:', error.message);
   }
 }
 
-// تشغيل البوت كل 5 ثوانٍ
 setInterval(checkMessages, 5000);
